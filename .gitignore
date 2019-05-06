@@ -1,0 +1,5 @@
+**/.DS_Store
+vendor/
+repos/
+config.yaml
+**/npm-debug.log
