@@ -9,7 +9,7 @@ import (
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Use:   "sopr",
+	Use: "sopr",
 }
 
 func Execute() {

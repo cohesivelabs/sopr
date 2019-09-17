@@ -1,11 +1,11 @@
 package config
 
 import (
-    "github.com/go-yaml/yaml"
-    "sopr/lib"
+	"github.com/go-yaml/yaml"
 	"io/ioutil"
 	"log"
 	"path"
+	"sopr/lib"
 )
 
 func ParseConfig() (Config, error) {

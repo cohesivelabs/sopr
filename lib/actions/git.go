@@ -7,73 +7,103 @@ import (
 	gogitConfig "gopkg.in/src-d/go-git.v4/config"
 	"log"
 	"os"
+	"sopr/lib/config"
 	"sopr/lib/git"
 	"sopr/lib/prompts"
 	"sort"
-	"sopr/lib/config"
+	"sync"
 )
 
 func GitInitialize() {
+	var waitGroup sync.WaitGroup
 	repos, err := git.RepoList(true)
 
 	if err != nil {
 		log.Fatalf("Error: could not read repository list - %s", err)
 	}
 
+	done := make(chan bool, len(repos))
+
 	for _, repo := range repos {
-		colour.Printf("Cloning into ^2%s^R. \n", repo.Config.Name)
-		fmt.Println("")
-
-		if(repo.Config.Remotes == nil || len(repo.Config.Remotes) == 0) {
-			colour.Printf("No remotes configured for ^2%s^R. \n", repo.Config.Name)
-			break;
-		}
-
-		// determine which remote should be the main remote
-		// first attempt to see if an "origin" is provided
-		// if no "origin" is found, use the first remote
-		var mainRemote *config.Remote
-		for _, remote := range repo.Config.Remotes {
-			if (remote.Name == "origin") {
-				mainRemote = &remote
-				break
-			}
-		}
-
-		if (mainRemote == nil) {
-			mainRemote = &repo.Config.Remotes[0]
-		}
-
-		ref, err := gogit.PlainClone(repo.FullPath, false, &gogit.CloneOptions{
-			URL:      mainRemote.Url,
-			RemoteName: mainRemote.Name,
-			Progress: os.Stdout,
-		})
-
-		for _, remote := range repo.Config.Remotes {
-			if (mainRemote.Name == remote.Name) {
-				continue
-			}
-
-			remoteConfig := &gogitConfig.RemoteConfig{
-				Name: remote.Name,
-				URLs: []string{remote.Url},
-			}
-
-			if _, err := ref.CreateRemote(remoteConfig); err != nil {
-				colour.Printf("Could not configure remote ^2%s^R. \n", remote.Url)
-			}
-		}
-
-		fmt.Println("")
-		if err != nil {
-			fmt.Println(fmt.Sprintf("Warning: could not clone repo (%s) - %s", repo.Config.Name, err))
-		} else {
-			colour.Printf("^2%s^R cloned to ^2%s^R. \n", repo.Config.Name, repo.FullPath)
-		}
-
-		fmt.Println("")
+		waitGroup.Add(1)
+		go clone(repo, done)
 	}
+
+	go func(done <-chan bool, waitGroup *sync.WaitGroup) {
+		for {
+			select {
+			case _, more := <-done:
+				waitGroup.Done()
+
+				if !more {
+					break
+				}
+			}
+		}
+	}(done, &waitGroup)
+
+	waitGroup.Wait()
+	fmt.Println("Completed Initialization")
+}
+
+func clone(repo git.Repo, done chan<- bool) {
+	colour.Printf("Cloning into ^2%s^R. \n", repo.Config.Name)
+
+	if repo.Config.Remotes == nil || len(repo.Config.Remotes) == 0 {
+		colour.Printf("No remotes configured for ^2%s^R. \n", repo.Config.Name)
+		done <- true
+		return
+	}
+
+	// determine which remote should be the main remote
+	// first attempt to see if an "origin" is provided
+	// if no "origin" is found, use the first remote
+	var mainRemote *config.Remote
+	for _, remote := range repo.Config.Remotes {
+		if remote.Name == "origin" {
+			mainRemote = &remote
+			break
+		}
+	}
+
+	if mainRemote == nil {
+		mainRemote = &repo.Config.Remotes[0]
+	}
+
+	ref, err := gogit.PlainClone(repo.FullPath, false, &gogit.CloneOptions{
+		URL:        mainRemote.Url,
+		RemoteName: mainRemote.Name,
+		Progress:   nil,
+	})
+
+	if err != nil {
+		colour.Printf("Unable to clone ^2%s^R: "+err.Error()+" \n", repo.Config.Name)
+		done <- true
+		return
+	}
+
+	for _, remote := range repo.Config.Remotes {
+		if mainRemote.Name == remote.Name {
+			continue
+		}
+
+		remoteConfig := &gogitConfig.RemoteConfig{
+			Name: remote.Name,
+			URLs: []string{remote.Url},
+		}
+
+		if _, err := ref.CreateRemote(remoteConfig); err != nil {
+			colour.Printf("Could not configure remote ^2%s^R. \n", remote.Url)
+		}
+	}
+
+	if err != nil {
+		fmt.Println(fmt.Sprintf("Warning: could not clone repo (%s) - %s", repo.Config.Name, err))
+	} else {
+		colour.Printf("^2%s^R cloned to ^2%s^R. \n", repo.Config.Name, repo.FullPath)
+	}
+
+	done <- true
 }
 
 func GitCheckoutBranch(branchName string, allRepos bool, create bool) {

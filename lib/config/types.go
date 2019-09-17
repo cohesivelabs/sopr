@@ -1,8 +1,8 @@
 package config
 
 type Remote struct {
-    Name string
-    Url string
+	Name string
+	Url  string
 }
 
 type RepoConfig struct {
@@ -14,6 +14,6 @@ type RepoConfig struct {
 }
 
 type Config struct {
-    RepoDirectory string `yaml:"repoDirectory"`
-	Repos []RepoConfig
+	RepoDirectory string `yaml:"repoDirectory"`
+	Repos         []RepoConfig
 }

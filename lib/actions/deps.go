@@ -1,9 +1,10 @@
 package actions
 
 import (
-    "fmt"
-	"io"
+	"bytes"
+	"fmt"
 	"github.com/alecthomas/colour"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -11,7 +12,6 @@ import (
 	"sopr/lib/prompts"
 	"strings"
 	"sync"
-	"bytes"
 )
 
 func execute(rawCommand string) {

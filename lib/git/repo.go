@@ -74,7 +74,7 @@ func (repo Repo) Pull() error {
 
 	err = tree.Pull(&git.PullOptions{
 		RemoteName: "origin",
-		Progress:	os.Stdout,
+		Progress:   os.Stdout,
 	})
 
 	return err
