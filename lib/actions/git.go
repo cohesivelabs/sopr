@@ -31,13 +31,11 @@ func GitInitialize() {
 
 	go func(done <-chan bool, waitGroup *sync.WaitGroup) {
 		for {
-			select {
-			case _, more := <-done:
-				waitGroup.Done()
+			_, more := <-done
+			waitGroup.Done()
 
-				if !more {
-					break
-				}
+			if !more {
+				break
 			}
 		}
 	}(done, &waitGroup)
