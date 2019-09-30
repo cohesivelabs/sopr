@@ -23,7 +23,7 @@ type cloneResult struct {
 }
 
 func GitInitialize() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	repos, err := git.RepoList(true)
@@ -38,10 +38,11 @@ func GitInitialize() {
 		resultChannels = append(resultChannels, clone(ctx, repo))
 	}
 
+monitor:
 	for _, ch := range resultChannels {
 		select {
 		case <-ctx.Done():
-			return
+			break monitor
 		case result := <-ch:
 			if result.Error == nil {
 				colour.Printf("^2%s^R cloned to ^2%s^R. \n", result.RepoName, result.Path)
@@ -66,6 +67,7 @@ func clone(ctx context.Context, repo git.Repo) <-chan cloneResult {
 	finalizeResult := func(ctx context.Context, r cloneResult, ch chan<- cloneResult) {
 		select {
 		case <-ctx.Done():
+			fmt.Println("cancelled.....")
 			return
 		case result <- r:
 			return
@@ -73,6 +75,13 @@ func clone(ctx context.Context, repo git.Repo) <-chan cloneResult {
 	}
 
 	go func(result chan<- cloneResult) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			break
+		}
+
 		if repo.Config.Remotes == nil || len(repo.Config.Remotes) == 0 {
 			r := cloneResult{
 				RepoName: repoName,
