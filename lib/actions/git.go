@@ -17,7 +17,6 @@ import (
 )
 
 type cloneResult struct {
-	Success  bool
 	Error    error
 	Path     string
 	RepoName string
@@ -44,7 +43,7 @@ func GitInitialize() {
 		case <-ctx.Done():
 			break
 		case result := <-results:
-			if result.Success {
+			if result.Error == nil {
 				colour.Printf("^2%s^R cloned to ^2%s^R. \n", result.RepoName, result.Path)
 			} else if result.Error.Error() != "repository already exists" {
 				colour.Printf("^1ERROR^R - failed cloning ^2%s^R: %s \n", result.RepoName, result.Error.Error())
@@ -58,10 +57,8 @@ func clone(ctx context.Context, repo git.Repo, results chan<- cloneResult) {
 
 	if repo.Config.Remotes == nil || len(repo.Config.Remotes) == 0 {
 		results <- cloneResult{
-			Success:  false,
 			RepoName: repoName,
 			Error:    errors.New("No remotes configured"),
-			Path:     repo.FullPath,
 		}
 		return
 	}
@@ -89,10 +86,8 @@ func clone(ctx context.Context, repo git.Repo, results chan<- cloneResult) {
 
 	if err != nil {
 		results <- cloneResult{
-			Success:  false,
 			RepoName: repoName,
 			Error:    err,
-			Path:     repo.FullPath,
 		}
 		return
 	}
@@ -113,7 +108,6 @@ func clone(ctx context.Context, repo git.Repo, results chan<- cloneResult) {
 	}
 
 	results <- cloneResult{
-		Success:  true,
 		RepoName: repoName,
 		Path:     repo.FullPath,
 	}
