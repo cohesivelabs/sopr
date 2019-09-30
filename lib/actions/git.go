@@ -32,17 +32,17 @@ func GitInitialize() {
 		log.Fatalf("Error: could not read repository list - %s", err)
 	}
 
-	results := make(chan cloneResult, len(repos))
+	var resultChannels []<-chan cloneResult
 
 	for _, repo := range repos {
-		go clone(ctx, repo, results)
+		resultChannels = append(resultChannels, clone(ctx, repo))
 	}
 
-	for i := 0; i < len(repos); i++ {
+	for _, ch := range resultChannels {
 		select {
 		case <-ctx.Done():
-			break
-		case result := <-results:
+			return
+		case result := <-ch:
 			if result.Error == nil {
 				colour.Printf("^2%s^R cloned to ^2%s^R. \n", result.RepoName, result.Path)
 			} else if result.Error.Error() != "repository already exists" {
@@ -50,67 +50,95 @@ func GitInitialize() {
 			}
 		}
 	}
+
+	select {
+	case <-ctx.Done():
+		colour.Print("^1ERROR^R - initialization timed out")
+	default:
+		return
+	}
 }
 
-func clone(ctx context.Context, repo git.Repo, results chan<- cloneResult) {
+func clone(ctx context.Context, repo git.Repo) <-chan cloneResult {
+	result := make(chan cloneResult)
 	repoName := repo.Config.Name
 
-	if repo.Config.Remotes == nil || len(repo.Config.Remotes) == 0 {
-		results <- cloneResult{
+	finalizeResult := func(ctx context.Context, r cloneResult, ch chan<- cloneResult) {
+		select {
+		case <-ctx.Done():
+			return
+		case result <- r:
+			return
+		}
+	}
+
+	go func(result chan<- cloneResult) {
+		if repo.Config.Remotes == nil || len(repo.Config.Remotes) == 0 {
+			r := cloneResult{
+				RepoName: repoName,
+				Error:    errors.New("No remotes configured"),
+			}
+
+			finalizeResult(ctx, r, result)
+			return
+		}
+
+		// determine which remote should be the main remote
+		// first attempt to see if an "origin" is provided
+		// if no "origin" is found, use the first remote
+		var mainRemote *config.Remote
+		for _, remote := range repo.Config.Remotes {
+			if remote.Name == "origin" {
+				mainRemote = &remote
+				break
+			}
+		}
+
+		if mainRemote == nil {
+			mainRemote = &repo.Config.Remotes[0]
+		}
+
+		ref, err := gogit.PlainCloneContext(ctx, repo.FullPath, false, &gogit.CloneOptions{
+			URL:        mainRemote.Url,
+			RemoteName: mainRemote.Name,
+			Progress:   nil,
+		})
+
+		if err != nil {
+			r := cloneResult{
+				RepoName: repoName,
+				Error:    err,
+			}
+
+			finalizeResult(ctx, r, result)
+			return
+		}
+
+		for _, remote := range repo.Config.Remotes {
+			if mainRemote.Name == remote.Name {
+				continue
+			}
+
+			remoteConfig := &gogitConfig.RemoteConfig{
+				Name: remote.Name,
+				URLs: []string{remote.Url},
+			}
+
+			if _, err := ref.CreateRemote(remoteConfig); err != nil {
+				colour.Printf("^3WARNING^R: Could not configure remote ^2%s^R for repo ^2%s^R. \n", remote.Url, repoName)
+			}
+		}
+
+		r := cloneResult{
 			RepoName: repoName,
-			Error:    errors.New("No remotes configured"),
+			Path:     repo.FullPath,
 		}
+
+		finalizeResult(ctx, r, result)
 		return
-	}
+	}(result)
 
-	// determine which remote should be the main remote
-	// first attempt to see if an "origin" is provided
-	// if no "origin" is found, use the first remote
-	var mainRemote *config.Remote
-	for _, remote := range repo.Config.Remotes {
-		if remote.Name == "origin" {
-			mainRemote = &remote
-			break
-		}
-	}
-
-	if mainRemote == nil {
-		mainRemote = &repo.Config.Remotes[0]
-	}
-
-	ref, err := gogit.PlainCloneContext(ctx, repo.FullPath, false, &gogit.CloneOptions{
-		URL:        mainRemote.Url,
-		RemoteName: mainRemote.Name,
-		Progress:   nil,
-	})
-
-	if err != nil {
-		results <- cloneResult{
-			RepoName: repoName,
-			Error:    err,
-		}
-		return
-	}
-
-	for _, remote := range repo.Config.Remotes {
-		if mainRemote.Name == remote.Name {
-			continue
-		}
-
-		remoteConfig := &gogitConfig.RemoteConfig{
-			Name: remote.Name,
-			URLs: []string{remote.Url},
-		}
-
-		if _, err := ref.CreateRemote(remoteConfig); err != nil {
-			colour.Printf("^3WARNING^R: Could not configure remote ^2%s^R for repo ^2%s^R. \n", remote.Url, repoName)
-		}
-	}
-
-	results <- cloneResult{
-		RepoName: repoName,
-		Path:     repo.FullPath,
-	}
+	return result
 }
 
 func GitCheckoutBranch(branchName string, allRepos bool, create bool) {
