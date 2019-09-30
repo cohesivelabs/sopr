@@ -1,6 +1,8 @@
 package actions
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/alecthomas/colour"
 	gogit "gopkg.in/src-d/go-git.v4"
@@ -11,45 +13,56 @@ import (
 	"sopr/lib/git"
 	"sopr/lib/prompts"
 	"sort"
-	"sync"
+	"time"
 )
 
+type cloneResult struct {
+	Success  bool
+	Error    error
+	Path     string
+	RepoName string
+}
+
 func GitInitialize() {
-	var waitGroup sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
 	repos, err := git.RepoList(true)
 
 	if err != nil {
 		log.Fatalf("Error: could not read repository list - %s", err)
 	}
 
-	done := make(chan bool, len(repos))
+	results := make(chan cloneResult, len(repos))
 
 	for _, repo := range repos {
-		waitGroup.Add(1)
-		go clone(repo, done)
+		go clone(ctx, repo, results)
 	}
 
-	go func(done <-chan bool, waitGroup *sync.WaitGroup) {
-		for {
-			_, more := <-done
-			waitGroup.Done()
-
-			if !more {
-				break
+	for i := 0; i < len(repos); i++ {
+		select {
+		case <-ctx.Done():
+			break
+		case result := <-results:
+			if result.Success {
+				colour.Printf("^2%s^R cloned to ^2%s^R. \n", result.RepoName, result.Path)
+			} else if result.Error.Error() != "repository already exists" {
+				colour.Printf("^1ERROR^R - failed cloning ^2%s^R: %s \n", result.RepoName, result.Error.Error())
 			}
 		}
-	}(done, &waitGroup)
-
-	waitGroup.Wait()
-	fmt.Println("Completed Initialization")
+	}
 }
 
-func clone(repo git.Repo, done chan<- bool) {
-	colour.Printf("Cloning into ^2%s^R. \n", repo.Config.Name)
+func clone(ctx context.Context, repo git.Repo, results chan<- cloneResult) {
+	repoName := repo.Config.Name
 
 	if repo.Config.Remotes == nil || len(repo.Config.Remotes) == 0 {
-		colour.Printf("No remotes configured for ^2%s^R. \n", repo.Config.Name)
-		done <- true
+		results <- cloneResult{
+			Success:  false,
+			RepoName: repoName,
+			Error:    errors.New("No remotes configured"),
+			Path:     repo.FullPath,
+		}
 		return
 	}
 
@@ -68,15 +81,19 @@ func clone(repo git.Repo, done chan<- bool) {
 		mainRemote = &repo.Config.Remotes[0]
 	}
 
-	ref, err := gogit.PlainClone(repo.FullPath, false, &gogit.CloneOptions{
+	ref, err := gogit.PlainCloneContext(ctx, repo.FullPath, false, &gogit.CloneOptions{
 		URL:        mainRemote.Url,
 		RemoteName: mainRemote.Name,
 		Progress:   nil,
 	})
 
 	if err != nil {
-		colour.Printf("Unable to clone ^2%s^R: "+err.Error()+" \n", repo.Config.Name)
-		done <- true
+		results <- cloneResult{
+			Success:  false,
+			RepoName: repoName,
+			Error:    err,
+			Path:     repo.FullPath,
+		}
 		return
 	}
 
@@ -91,17 +108,15 @@ func clone(repo git.Repo, done chan<- bool) {
 		}
 
 		if _, err := ref.CreateRemote(remoteConfig); err != nil {
-			colour.Printf("Could not configure remote ^2%s^R. \n", remote.Url)
+			colour.Printf("^3WARNING^R: Could not configure remote ^2%s^R for repo ^2%s^R. \n", remote.Url, repoName)
 		}
 	}
 
-	if err != nil {
-		fmt.Println(fmt.Sprintf("Warning: could not clone repo (%s) - %s", repo.Config.Name, err))
-	} else {
-		colour.Printf("^2%s^R cloned to ^2%s^R. \n", repo.Config.Name, repo.FullPath)
+	results <- cloneResult{
+		Success:  true,
+		RepoName: repoName,
+		Path:     repo.FullPath,
 	}
-
-	done <- true
 }
 
 func GitCheckoutBranch(branchName string, allRepos bool, create bool) {

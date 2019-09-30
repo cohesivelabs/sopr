@@ -2,6 +2,7 @@ package actions
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/alecthomas/colour"
 	"io"
@@ -11,16 +12,17 @@ import (
 	"sopr/lib/git"
 	"sopr/lib/prompts"
 	"strings"
-	"sync"
+	"time"
 )
 
 func execute(rawCommand string) {
-	var stdoutBuffer bytes.Buffer
-	var stderrBuffer bytes.Buffer
-	var waitGroup sync.WaitGroup
+	var stdoutBuffer, stderrBuffer bytes.Buffer
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
 	command := strings.Split(rawCommand, " ")
-	cmd := exec.Command(command[0], command[1:]...)
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -32,25 +34,23 @@ func execute(rawCommand string) {
 		log.Fatal(err)
 	}
 
-	stdoutWriter := io.MultiWriter(os.Stdout, &stdoutBuffer)
-	stderrWriter := io.MultiWriter(os.Stderr, &stderrBuffer)
-
 	cmd.Start()
 
-	waitGroup.Add(1)
-	go func() {
-		defer waitGroup.Done()
-		io.Copy(stdoutWriter, stdout)
-	}()
-
-	waitGroup.Add(1)
-	go func() {
-		defer waitGroup.Done()
-		io.Copy(stderrWriter, stderr)
-	}()
+	go writeToConsole(ctx, &stdoutBuffer, os.Stdout, stdout)
+	go writeToConsole(ctx, &stderrBuffer, os.Stderr, stderr)
 
 	cmd.Wait()
-	waitGroup.Wait()
+}
+
+func writeToConsole(ctx context.Context, buffer *bytes.Buffer, target io.Writer, pipe io.ReadCloser) {
+	writer := io.MultiWriter(target, buffer)
+	io.Copy(writer, pipe)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func DepsInstall(allRepos, dryrun bool) {
