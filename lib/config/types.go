@@ -7,10 +7,10 @@ type Remote struct {
 
 type RepoConfig struct {
 	Name        string
-	Path        string
+	Path        *string
 	Remotes     []Remote
-	InstallDeps string `yaml:"installDeps"`
-	RemoveDeps  string `yaml:"removeDeps"`
+	InstallDeps *string `yaml:"installDeps"`
+	RemoveDeps  *string `yaml:"removeDeps"`
 }
 
 type Config struct {

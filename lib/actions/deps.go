@@ -56,7 +56,7 @@ func writeToConsole(ctx context.Context, buffer *bytes.Buffer, target io.Writer,
 func DepsInstall(allRepos, dryrun bool) {
 	var selectedRepos []git.Repo
 
-	repos, err := git.RepoList(false)
+	repos, err := git.RepoList(true)
 	if err != nil {
 		fmt.Printf("Error getting repo list %s", err)
 		os.Exit(1)
@@ -73,11 +73,11 @@ func DepsInstall(allRepos, dryrun bool) {
 	}
 
 	for _, repo := range selectedRepos {
-		if repo.Config.InstallDeps != "" {
-			colour.Printf("^running command (^2%s^R) for ^2%s^R. \n", repo.Config.InstallDeps, repo.Config.Name)
+		if repo.Config.InstallDeps != nil {
+			colour.Printf("^running command (^2%s^R) for ^2%s^R. \n", *repo.Config.InstallDeps, repo.Config.Name)
 
 			if dryrun == false {
-				execute(repo.Config.InstallDeps)
+				execute(*repo.Config.InstallDeps)
 			}
 		}
 	}
@@ -86,7 +86,7 @@ func DepsInstall(allRepos, dryrun bool) {
 func DepsRemove(allRepos, dryrun bool) {
 	var selectedRepos []git.Repo
 
-	repos, err := git.RepoList(false)
+	repos, err := git.RepoList(true)
 	if err != nil {
 		fmt.Printf("Error getting repo list %s", err)
 		os.Exit(1)
@@ -103,11 +103,11 @@ func DepsRemove(allRepos, dryrun bool) {
 	}
 
 	for _, repo := range selectedRepos {
-		if repo.Config.InstallDeps != "" {
+		if repo.Config.InstallDeps != nil {
 			colour.Printf("^running command (^2%s^R) for ^2%s^R. \n", repo.Config.RemoveDeps, repo.Config.Name)
 
 			if dryrun == false {
-				execute(repo.Config.RemoveDeps)
+				execute(*repo.Config.RemoveDeps)
 			}
 		}
 	}

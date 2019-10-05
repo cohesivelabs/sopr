@@ -26,7 +26,9 @@ func RepoList(returnMissing bool) ([]Repo, error) {
 		repo := Repo{}
 
 		repo.Config = repoConfig
-		repo.FullPath = path.Join(basePath, config.RepoDirectory, repoConfig.Path)
+		if repoConfig.Path != nil {
+			repo.FullPath = path.Join(basePath, config.RepoDirectory, *repoConfig.Path)
+		}
 
 		if ref, err := git.PlainOpen(repo.FullPath); err == nil {
 			repo.Ref = ref
