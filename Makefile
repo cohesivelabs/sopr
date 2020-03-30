@@ -4,5 +4,5 @@ SHELL := /bin/bash
 default: dev
 
 dev:
-	docker build -t sopr:dev .
-	docker run -ti "sopr:dev" /bin/bash
+	DOCKER_BUILDKIT=1 docker build -t sopr:dev .
+	docker run -ti -v $(pwd)/src sopr:dev /bin/bash
