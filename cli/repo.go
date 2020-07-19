@@ -1,11 +1,11 @@
-package cmd
+package cli
 
 import (
+	"github.com/alecthomas/colour"
 	"github.com/spf13/cobra"
-	"sopr/lib/actions"
+	"sopr/git"
+	"sopr/helpers"
 )
-
-var AllRepos bool
 
 // repoCmd represents the repo command
 var repoCmd = &cobra.Command{
@@ -19,7 +19,14 @@ var updateCmd = &cobra.Command{
 	Short: "Perform git pull",
 	Args:  cobra.OnlyValidArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		actions.GitUpdate(AllRepos)
+		repos := helpers.ProjectsWithRepos()
+
+		if len(repos) <= 0 {
+			colour.Print("^1Error^R - No projects configured with git remotes")
+			return
+		}
+
+		git.Update(getSelectedRepos(AllRepos, repos))
 	},
 }
 
@@ -34,13 +41,17 @@ var createBranchCmd = &cobra.Command{
 	Short: "Create git branch",
 	Args:  cobra.MinimumNArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		branchName := ""
+		repos := helpers.ProjectsWithRepos()
 
-		if len(args) > 0 {
-			branchName = args[0]
+		if len(repos) <= 0 {
+			colour.Print("^1Error^R - No projects configured with git remotes")
+			return
 		}
 
-		actions.GitCheckoutBranch(branchName, AllRepos, true)
+		branchName := getBranchName(args)
+		selectedProjects := getSelectedRepos(AllRepos, repos)
+
+		git.CheckoutBranch(selectedProjects, branchName, AllRepos, true)
 	},
 }
 
@@ -49,7 +60,14 @@ var listRepoCmd = &cobra.Command{
 	Short: "List repos and their branches",
 	Args:  cobra.MinimumNArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		actions.GitListRepos()
+		repos := helpers.ProjectsWithRepos()
+
+		if len(repos) <= 0 {
+			colour.Print("^1Error^R - No projects configured with git remotes")
+			return
+		}
+
+		git.ListRepos()
 	},
 }
 
@@ -58,13 +76,18 @@ var switchBranchCmd = &cobra.Command{
 	Short: "Change git branch",
 	Args:  cobra.MinimumNArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		branchName := ""
+		repos := helpers.ProjectsWithRepos()
 
-		if len(args) > 0 {
-			branchName = args[0]
+		if len(repos) <= 0 {
+			colour.Print("^1Error^R - No projects configured with git remotes")
+			return
 		}
 
-		actions.GitCheckoutBranch(branchName, AllRepos, false)
+		branchName := getBranchName(args)
+
+		selectedProjects := getSelectedRepos(AllRepos, repos)
+
+		git.CheckoutBranch(selectedProjects, branchName, AllRepos, false)
 	},
 }
 

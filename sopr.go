@@ -1,9 +1,9 @@
 package main
 
 import (
-	"sopr/cmd"
+	"sopr/cli"
 )
 
 func main() {
-	cmd.Execute()
+	cli.Execute()
 }

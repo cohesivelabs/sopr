@@ -3,3 +3,4 @@ vendor/
 repos/
 config.yaml
 **/npm-debug.log
+build/
