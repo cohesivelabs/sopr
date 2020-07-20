@@ -20,5 +20,5 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
-        project_path: "./build/sopr"
+        project_path: "./"
         binary_name: "sopr"
