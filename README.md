@@ -15,7 +15,7 @@ Additionally it provides wrapper for a number of git operations to be performed 
 4. From the root directory of the repository run `go install`
 
 ## Installation
-Availabe on homebrew `brew install sopr`, for other operating systems see the releases and download the appropriate binary and place it on your cli path
+In github, view the latest release and download the appropriate binary for your os/arch and place it on your cli path
 
 ## Usage
 
